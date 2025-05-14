@@ -11,7 +11,7 @@ using UnityEngine.UI;
 public class ApiReciever : MonoBehaviour
 {
     [SerializeField]
-    string url;
+    string url = "https://7485-45-5-174-126.ngrok-free.app/tags/maquina";
 
     [SerializeField]
     TMP_Text initialTimeText;
