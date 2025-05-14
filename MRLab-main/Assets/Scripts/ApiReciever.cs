@@ -1,102 +1,72 @@
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.Networking;
-using SimpleJSON;
 using System;
+using System.Collections;
+using UnityEngine;
 using TMPro;
 using UnityEngine.UI;
 
-
 public class ApiReciever : MonoBehaviour
 {
-    [SerializeField]
-    string url = "https://7485-45-5-174-126.ngrok-free.app/tags/maquina";
+    [Header("UI References")]
+    [SerializeField] TMP_Text initialTimeText;
+    [SerializeField] TMP_Text totalTimeText;
+    [SerializeField] TMP_Text bottlesText;
+    [SerializeField] TMP_Text energyCostText;
+    [SerializeField] Image fillingBottle;
+    [SerializeField] Color[] colors;           // 0: bajo, 1: medio, 2: alto
 
-    [SerializeField]
-    TMP_Text initialTimeText;
-    [SerializeField]
-    TMP_Text totalTimeText;
-    [SerializeField]
-    TMP_Text bottlesText;
-    [SerializeField]
-    TMP_Text energyCostText;
-    [SerializeField]
-    Image fillingBottle;
-    [SerializeField]
-    Color[] colors;
+    [Header("Simulation Settings")]
+    [SerializeField] int totalBotellas = 100;
+    [SerializeField] float updateInterval = 0.5f;   // cada cuánto actualiza la UI
+    [SerializeField] float bottleIncrementPeriod = 8f;     // cada cuántos segundos +1 botella
 
-    private bool start = true;
+    private DateTime horaInicio;
+    private int botellasLlenas;
+    private float tiempoDesdeUltimoIncremento;
 
     private void Start()
     {
-        if (start)
-        {
-            StartCoroutine(ReadAPI());
-            start = false;
-        }
+        horaInicio = DateTime.Now;
+        botellasLlenas = 0;
+        tiempoDesdeUltimoIncremento = 0f;
+        StartCoroutine(SimulateData());
     }
 
-
-    private void OnEnable()
+    IEnumerator SimulateData()
     {
-        if (!start)
-        StartCoroutine(ReadAPI());
-    }
-
-    public class ForceAcceptAll : CertificateHandler
-    {
-        protected override bool ValidateCertificate(byte[] certificateData)
+        while (true)
         {
-            return true;
-        }
-    }
+            // 1) Tiempo de operación
+            TimeSpan diff = DateTime.Now - horaInicio;
 
-    IEnumerator ReadAPI()
-    {
-        while(true)
-        {
-            UnityWebRequest web = UnityWebRequest.Get(url);
-            var cert = new ForceAcceptAll();
-            web.certificateHandler = cert;
-
-
-            yield return web.SendWebRequest();
-
-            if (web.result == UnityWebRequest.Result.ConnectionError || web.result == UnityWebRequest.Result.ProtocolError)
+            // 2) Incremento de botellas cada X segundos
+            tiempoDesdeUltimoIncremento += updateInterval;
+            if (tiempoDesdeUltimoIncremento >= bottleIncrementPeriod)
             {
-                Debug.LogError(web.error);
-                initialTimeText.text = web.error.ToString();
-                yield break;
+                if (botellasLlenas < totalBotellas)
+                    botellasLlenas++;
+                tiempoDesdeUltimoIncremento = 0f;
             }
 
-            JSONNode response = JSON.Parse(web.downloadHandler.text);
-            var data = response["data"];
+            // 3) Consumo energético aleatorio
+            float consumoAleatorio = UnityEngine.Random.Range(50000f, 90000f);
+            double energyCost = diff.TotalHours * consumoAleatorio;
 
-            // data["..."]
+            // 4) Actualizar UI
+            initialTimeText.text = horaInicio.ToString("HH:mm:ss");
+            totalTimeText.text = diff.ToString(@"hh\:mm\:ss");
+            bottlesText.text = $"{botellasLlenas}/{totalBotellas}";
+            energyCostText.text = $"{energyCost:N2} kW";
 
-
-            DateTime initialTime = new(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
-            int apiInitialTime = int.Parse(int.Parse(data["tiempooperacionh"]).ToString("D4") + int.Parse(data["tiempooperacionm"]).ToString("D4") + int.Parse(data["tiempooperacionl"]).ToString(""));
-            Debug.Log(apiInitialTime);
-            initialTime = initialTime.AddSeconds(apiInitialTime).ToLocalTime();
-
-            TimeSpan difference = DateTime.Now - initialTime;
-
-            float fillAmount = (float) data["botellasllenas"] / (float) data["totalbotellas"];
-
-            double energyCost = difference.TotalHours * data["consumo"];
-
-
-            initialTimeText.text = initialTime.ToString(@"HH:mm:ss");
-            totalTimeText.text = difference.ToString(@"hh\:mm\:ss");
-            bottlesText.text = data["botellasllenas"].ToString()+"/"+ data["totalbotellas"].ToString();
+            // 5) Barra de llenado
+            float fillAmount = (float)botellasLlenas / totalBotellas;
             fillingBottle.fillAmount = fillAmount;
-            fillingBottle.color = fillAmount < 0.33 ? colors[0] : (fillAmount >= 0.33 && fillAmount < 0.66) ? colors[1] : colors[2];
-            energyCostText.text = energyCost.ToString("N2")+"KW";
+            fillingBottle.color = fillAmount < 0.33f
+                ? colors[0]
+                : (fillAmount < 0.66f
+                    ? colors[1]
+                    : colors[2]);
 
-            yield return new WaitForSeconds(0.50f);
+            yield return new WaitForSeconds(updateInterval);   
         }
-   
     }
 }
